@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "886353618874",
+    "project_id": "flutter-fitsnap",
+    "storage_bucket": "flutter-fitsnap.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:886353618874:android:7ee4b2608a6731e08c1f83",
+        "android_client_info": {
+          "package_name": "com.example.flutter_fitsnap"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyBcdAAsuJrdOTpgbslCpZnK73kFrRT-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

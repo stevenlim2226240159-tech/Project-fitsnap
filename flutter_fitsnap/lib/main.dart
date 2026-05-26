@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_fitsnap/screens/home_screen.dart';
+import 'package:flutter_fitsnap/screens/post_photo_screen.dart';
+import 'screens/sign_in_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,7 +33,7 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const SignInScreen(),
     );
   }
 }
