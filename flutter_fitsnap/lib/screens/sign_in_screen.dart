@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'sign_up_screen.dart';
 import 'home_screen.dart';
 
@@ -13,26 +14,53 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? _error;
+  bool _isLoading = false;
 
-  void _signIn() {
+  Future<void> _signIn() async {
     final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    // Dummy validation, ganti dengan Firebase Auth
+    final password = _passwordController.text.trim();
+
     if (email.isEmpty || password.isEmpty) {
       setState(() {
         _error = 'Email dan password wajib diisi';
       });
       return;
     }
-    // TODO: Ganti dengan validasi Firebase Auth
-    if (email == 'user@email.com' && password == 'password123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } else {
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      if (userCredential.user != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = 'Email atau password salah';
+        switch (e.code) {
+          case 'user-not-found':
+            _error = 'Email tidak terdaftar';
+            break;
+          case 'wrong-password':
+            _error = 'Password salah';
+            break;
+          case 'invalid-email':
+            _error = 'Format email tidak valid';
+            break;
+          default:
+            _error = 'Login gagal: ${e.message}';
+        }
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
       });
     }
   }
@@ -50,28 +78,35 @@ class _SignInScreenState extends State<SignInScreen> {
               const SizedBox(height: 32),
               TextField(
                 controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'Email'),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                decoration: InputDecoration(labelText: 'Password'),
+                decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(_error!, style: TextStyle(color: Colors.red)),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
               ],
               const SizedBox(height: 32),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  minimumSize: Size(double.infinity, 48),
-                ),
-                onPressed: _signIn,
-                child: const Text('Sign In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: _signIn,
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
               TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -79,7 +114,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     MaterialPageRoute(builder: (_) => const SignUpScreen()),
                   );
                 },
-                child: const Text('Don\'t have an account? Sign Up'),
+                child: const Text("Don't have an account? Sign Up"),
               ),
             ],
           ),

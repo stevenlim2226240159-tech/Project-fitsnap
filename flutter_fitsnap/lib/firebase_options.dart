@@ -83,4 +83,5 @@ class DefaultFirebaseOptions {
     authDomain: 'flutter-fitsnap.firebaseapp.com',
     storageBucket: 'flutter-fitsnap.firebasestorage.app',
   );
+
 }
