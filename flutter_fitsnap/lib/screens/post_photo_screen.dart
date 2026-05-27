@@ -1,10 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'home_screen.dart';
 
 class PostPhotoScreen extends StatefulWidget {
   const PostPhotoScreen({Key? key}) : super(key: key);
@@ -14,62 +16,83 @@ class PostPhotoScreen extends StatefulWidget {
 }
 
 class _PostPhotoScreenState extends State<PostPhotoScreen> {
-  File? _image;
+  XFile? _pickedFile;
+  Uint8List? _imageBytes;
+  String? _base64Image;
   final TextEditingController _captionController = TextEditingController();
-  bool _isLoading = false;
+  bool _isUploading = false;
+
+  final ImagePicker _picker = ImagePicker();
 
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _image = File(picked.path);
-      });
+    try {
+      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _pickedFile = pickedFile;
+          _imageBytes = bytes;
+          _base64Image = base64Encode(bytes); // simpan base64
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
     }
   }
 
   Future<void> _uploadPost() async {
-    if (_image == null) return;
-
-    setState(() => _isLoading = true);
+    if (_base64Image == null || _captionController.text.isEmpty) return;
+    setState(() => _isUploading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = FirebaseStorage.instance.ref().child('posts/$fileName');
+      if (user == null) {
+        throw Exception("User not logged in");
+      }
 
-      await ref.putFile(_image!);
-      final url = await ref.getDownloadURL();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final username = userDoc.data()?['username']?.toString() ?? user.email ?? 'Unknown';
 
       await FirebaseFirestore.instance.collection('posts').add({
-        'userId': user?.uid,
-        'username': user?.email ?? 'Unknown',
+        'userId': user.uid,
+        'username': username,
         'caption': _captionController.text,
-        'imageUrl': url,
+        'imageBase64': _base64Image, // simpan base64 string
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Post berhasil ditambahkan')));
+      setState(() {
+        _pickedFile = null;
+        _imageBytes = null;
+        _base64Image = null;
+        _captionController.clear();
+      });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Upload gagal: $e')));
     } finally {
-      setState(() => _isLoading = false);
+      setState(() => _isUploading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final previewWidget = _imageBytes != null
+        ? Image.memory(_imageBytes!, fit: BoxFit.cover)
+        : const Center(child: Icon(Icons.add_a_photo,
+            size: 64, color: Colors.deepPurple));
+
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Post Photo'),
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Post Photo',
-            style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
-        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -85,23 +108,15 @@ class _PostPhotoScreenState extends State<PostPhotoScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.deepPurple.shade100),
                 ),
-                child: _image == null
-                    ? const Center(
-                        child: Icon(Icons.add_a_photo,
-                            size: 64, color: Colors.deepPurple),
-                      )
-                    : Image.file(_image!, fit: BoxFit.cover),
+                child: previewWidget,
               ),
             ),
             const SizedBox(height: 24),
             TextField(
               controller: _captionController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Caption',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.deepPurple.shade50,
+                border: OutlineInputBorder(),
               ),
               maxLines: 2,
             ),
@@ -109,7 +124,7 @@ class _PostPhotoScreenState extends State<PostPhotoScreen> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: _isLoading
+              child: _isUploading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
                       style: ElevatedButton.styleFrom(

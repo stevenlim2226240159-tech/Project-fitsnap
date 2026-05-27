@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'profile_screen.dart';
@@ -15,10 +17,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   List<Widget> get _screens => [
-    const _FeedScreen(),
-    const PostPhotoScreen(),
-    ProfileScreen(onLogout: _handleLogout),
-  ];
+        const _FeedScreen(),
+        const PostPhotoScreen(),
+        ProfileScreen(onLogout: _handleLogout),
+      ];
 
   void _handleLogout() {
     Navigator.of(context).pushAndRemoveUntil(
@@ -90,9 +92,44 @@ class _FeedScreen extends StatelessWidget {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final post = posts[index].data() as Map<String, dynamic>;
+                  final imageUrl = post['imageUrl']?.toString() ?? '';
+                  final imageBase64 = post['imageBase64']?.toString() ?? '';
+
+                  Widget? imageWidget;
+                  if (imageUrl.isNotEmpty) {
+                    imageWidget = Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text(
+                            'Gambar tidak bisa dimuat',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        );
+                      },
+                    );
+                  } else if (imageBase64.isNotEmpty) {
+                    try {
+                      imageWidget = Image.memory(
+                        base64Decode(imageBase64),
+                        fit: BoxFit.cover,
+                      );
+                    } catch (_) {
+                      imageWidget = const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          'Gambar tidak bisa dimuat',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      );
+                    }
+                  }
+
                   return Card(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                    margin: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 16),
                     elevation: 3,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
@@ -108,22 +145,17 @@ class _FeedScreen extends StatelessWidget {
                             radius: 24,
                           ),
                           title: Text(post['username'] ?? 'Unknown',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold)),
                           subtitle: Text(post['createdAt'] != null
-                              ? post['createdAt']
-                                  .toDate()
-                                  .toString()
+                              ? post['createdAt'].toDate().toString()
                               : ''),
                           trailing: const Icon(Icons.more_vert),
                         ),
-                        if (post['imageUrl'] != null)
+                        if (imageWidget != null)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              post['imageUrl'],
-                              fit: BoxFit.cover,
-                            ),
+                            child: imageWidget,
                           ),
                         Padding(
                           padding: const EdgeInsets.symmetric(
