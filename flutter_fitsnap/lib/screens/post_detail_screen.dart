@@ -81,8 +81,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       });
       await postRef.update({'commentsCount': FieldValue.increment(1)});
       _commentController.clear();
-    } catch (_) {}
-    if (mounted) setState(() => _isPostingComment = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Komentar terkirim')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengirim komentar: ${e.toString()}')));
+      }
+    } finally {
+      if (mounted) setState(() => _isPostingComment = false);
+    }
   }
 
   void _requireAuth() {

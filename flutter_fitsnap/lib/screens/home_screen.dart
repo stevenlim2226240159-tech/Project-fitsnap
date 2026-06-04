@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'post_detail_screen.dart';
 import '../theme.dart';
 import 'profile_screen.dart';
 import 'post_photo_screen.dart';
@@ -62,10 +64,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _FeedScreen extends StatelessWidget {
+class _FeedScreen extends StatefulWidget {
   const _FeedScreen({Key? key}) : super(key: key);
 
+  @override
+  State<_FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<_FeedScreen> {
   static const double _imageHeight = 260;
+
+  Future<void> _toggleLike(String postId, bool isLiked) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignInScreen()));
+      return;
+    }
+
+    final likeRef = FirebaseFirestore.instance.collection('posts').doc(postId).collection('likes').doc(user.uid);
+    final postRef = FirebaseFirestore.instance.collection('posts').doc(postId);
+
+    final batch = FirebaseFirestore.instance.batch();
+    if (isLiked) {
+      batch.delete(likeRef);
+      batch.update(postRef, {'likesCount': FieldValue.increment(-1)});
+    } else {
+      batch.set(likeRef, {'userId': user.uid, 'createdAt': FieldValue.serverTimestamp()});
+      batch.update(postRef, {'likesCount': FieldValue.increment(1)});
+    }
+    try {
+      await batch.commit();
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +164,7 @@ class _FeedScreen extends StatelessWidget {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final post = posts[index].data() as Map<String, dynamic>;
+                    final postId = posts[index].id;
                     final imageUrl = post['imageUrl']?.toString() ?? '';
                     final imageBase64 = post['imageBase64']?.toString() ?? '';
 
@@ -278,12 +309,66 @@ class _FeedScreen extends StatelessWidget {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                             child: Text(
                               post['caption'] ?? '',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 height: 1.5,
                               ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                            child: Row(
+                              children: [
+                                if (postId != null)
+                                  StreamBuilder<DocumentSnapshot>(
+                                    stream: FirebaseFirestore.instance.collection('posts').doc(postId).collection('likes').doc(FirebaseAuth.instance.currentUser?.uid ?? '').snapshots(),
+                                    builder: (context, likeSnap) {
+                                      final isLiked = likeSnap.hasData && likeSnap.data!.exists;
+                                      final likes = post['likesCount'] ?? 0;
+                                      return Row(
+                                        children: [
+                                          IconButton(
+                                            onPressed: () => _toggleLike(postId, isLiked),
+                                            icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.black87),
+                                          ),
+                                          Text(likes.toString()),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                const SizedBox(width: 12),
+                                InkWell(
+                                  onTap: () {
+                                    if (postId != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => PostDetailScreen(post: {...post, 'id': postId})),
+                                      );
+                                    }
+                                  },
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.mode_comment_outlined, color: Colors.black54),
+                                      const SizedBox(width: 6),
+                                      Text((post['commentsCount'] ?? 0).toString()),
+                                    ],
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  onPressed: () {
+                                    if (postId != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => PostDetailScreen(post: {...post, 'id': postId})),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.open_in_new, color: Colors.black45),
+                                ),
+                              ],
                             ),
                           ),
                         ],
