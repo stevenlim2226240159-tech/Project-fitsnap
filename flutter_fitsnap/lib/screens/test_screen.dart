@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../theme.dart';
+
 class FirestoreTestScreen extends StatelessWidget {
   const FirestoreTestScreen({Key? key}) : super(key: key);
 
@@ -23,12 +25,12 @@ class FirestoreTestScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Firestore Test'),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: AppColors.primary,
       ),
       body: Center(
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepPurple,
+            backgroundColor: AppColors.primary,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16)),
           ),

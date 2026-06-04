@@ -6,6 +6,54 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../theme.dart';
+
+ImageProvider<Object>? _imageProviderFromAvatarStrings({
+  String? base64Str,
+  String? url,
+}) {
+  try {
+    if (base64Str != null && base64Str.trim().isNotEmpty) {
+      var s = base64Str.trim();
+      // handle data URI like "data:image/png;base64,..."
+      final commaIndex = s.indexOf(',');
+      if (s.startsWith('data:') && commaIndex != -1) {
+        s = s.substring(commaIndex + 1);
+      }
+      final bytes = base64Decode(s);
+      return MemoryImage(bytes);
+    }
+  } catch (_) {
+    // fallthrough to try URL
+  }
+
+  if (url != null && url.trim().isNotEmpty) {
+    final u = url.trim();
+    if (u.startsWith('http')) {
+      return NetworkImage(u);
+    }
+  }
+
+  return null;
+}
+
+Widget statItem(String label, String count) {
+  return Column(
+    children: [
+      Text(
+        count,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          color: AppColors.primary,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(label, style: const TextStyle(color: Colors.black54)),
+    ],
+  );
+}
+
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onLogout;
   const ProfileScreen({Key? key, this.onLogout}) : super(key: key);
@@ -72,52 +120,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final user = _user;
     if (user == null) {
       return Scaffold(
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.surface,
           elevation: 0,
-          title: const Text('Profile',
-              style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Profile',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           centerTitle: true,
         ),
-        body: const Center(
-          child: Text('Silakan login terlebih dahulu.'),
-        ),
+        body: const Center(child: Text('Silakan login terlebih dahulu.')),
       );
     }
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        title: const Text('Profile',
-            style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.deepPurple),
-            tooltip: 'Logout',
-            onPressed: widget.onLogout ?? () {},
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.bold,
           ),
-        ],
+        ),
+        centerTitle: true,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
-          if (snapshot.connectionState == ConnectionState.waiting || _isCreatingUserDoc) {
+          if (snapshot.connectionState == ConnectionState.waiting ||
+              _isCreatingUserDoc) {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || !snapshot.data!.exists) {
-            if (user != null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _createDefaultUserDoc(user);
-              });
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _createDefaultUserDoc(user);
+            });
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -125,112 +179,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final username = data['username']?.toString() ?? 'Unknown';
           final avatarUrl = data['avatarUrl']?.toString() ?? '';
           final avatarBase64 = data['avatarBase64']?.toString() ?? '';
-          final postsCount = data['postsCount'] ?? 0;
           final followers = data['followers'] ?? 0;
           final following = data['following'] ?? 0;
 
-          ImageProvider<Object>? avatarImage;
-          if (_avatarBytes != null) {
-            avatarImage = MemoryImage(_avatarBytes!);
-          } else if (avatarBase64.isNotEmpty) {
-            try {
-              avatarImage = MemoryImage(base64Decode(avatarBase64));
-            } catch (_) {
-              avatarImage = null;
-            }
-          } else if (avatarUrl.isNotEmpty) {
-            avatarImage = NetworkImage(avatarUrl);
-          }
+          ImageProvider<Object>? avatarImage = _imageProviderFromAvatarStrings(
+            base64Str: _avatarBytes != null ? base64Encode(_avatarBytes!) : avatarBase64,
+            url: avatarUrl,
+          );
 
           return SingleChildScrollView(
             child: Column(
               children: [
-                const SizedBox(height: 32),
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    CircleAvatar(
-                      radius: 54,
-                      backgroundColor: Colors.deepPurple.shade100,
-                      backgroundImage: avatarImage,
-                      child: avatarImage == null
-                          ? const Icon(Icons.person, size: 48, color: Colors.white)
-                          : null,
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.secondary],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                    GestureDetector(
-                      onTap: _isSavingAvatar ? null : _pickAvatar,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(32),
+                      bottomRight: Radius.circular(32),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 32,
+                    horizontal: 24,
+                  ),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: IconButton(
+                          icon: const Icon(Icons.logout, color: Colors.white),
+                          onPressed: widget.onLogout ?? () {},
+                          tooltip: 'Logout',
                         ),
-                        child: _isSavingAvatar
-                            ? const Padding(
-                                padding: EdgeInsets.all(6.0),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.edit, size: 18, color: Colors.white),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(username,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                        color: Colors.deepPurple)),
-                const SizedBox(height: 8),
-                Text(user.email ?? '', style: TextStyle(color: Colors.grey[700])),
-                const SizedBox(height: 24),
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Column(
-                          children: [
-                            Text('$postsCount',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Colors.deepPurple)),
-                            const Text('Posts'),
-                          ],
+                      const SizedBox(height: 4),
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          CircleAvatar(
+                            radius: 58,
+                            backgroundColor: AppColors.secondary.withOpacity(
+                              0.24,
+                            ),
+                            backgroundImage: avatarImage,
+                            child: avatarImage == null
+                                ? const Icon(
+                                    Icons.person,
+                                    size: 48,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                          GestureDetector(
+                            onTap: _isSavingAvatar ? null : _pickAvatar,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                _isSavingAvatar
+                                    ? Icons.hourglass_top
+                                    : Icons.edit,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        username,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        Column(
-                          children: [
-                            Text('$followers',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Colors.deepPurple)),
-                            const Text('Followers'),
-                          ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        user.email ?? '',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
                         ),
-                        Column(
-                          children: [
-                            Text('$following',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Colors.deepPurple)),
-                            const Text('Following'),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -241,20 +282,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       .snapshots(),
                   builder: (context, postSnapshot) {
                     if (postSnapshot.hasError) {
-                      return Center(child: Text('Error: ${postSnapshot.error}'));
-                    }
-                    if (postSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!postSnapshot.hasData || postSnapshot.data!.docs.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Center(child: Text('Belum ada postingan')), 
+                      return Center(
+                        child: Text('Error: ${postSnapshot.error}'),
                       );
                     }
+                    if (postSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                    // Sort documents client-side to avoid requiring a Firestore composite index
-                    final docs = postSnapshot.data!.docs.toList();
+                    final docs = postSnapshot.data?.docs.toList() ?? [];
+                    final actualPostsCount = docs.length;
+
                     docs.sort((a, b) {
                       final aData = a.data() as Map<String, dynamic>;
                       final bData = b.data() as Map<String, dynamic>;
@@ -269,58 +308,330 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return 0;
                       }
                     });
-                    final posts = docs;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: posts.length,
-                        itemBuilder: (context, index) {
-                          final post = posts[index].data() as Map<String, dynamic>;
-                          final imageUrl = post['imageUrl']?.toString() ?? '';
-                          final imageBase64 = post['imageBase64']?.toString() ?? '';
 
-                          Widget postImage;
-                          if (imageUrl.isNotEmpty) {
-                            postImage = Image.network(imageUrl, fit: BoxFit.cover);
-                          } else if (imageBase64.isNotEmpty) {
-                            try {
-                              postImage = Image.memory(
-                                base64Decode(imageBase64),
-                                fit: BoxFit.cover,
-                              );
-                            } catch (_) {
-                              postImage = Container(
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                  child: Text('Gambar tidak bisa dimuat'),
-                                ),
-                              );
-                            }
-                          } else {
-                            postImage = Container(
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: Text('Tidak ada gambar'),
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Card(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 20,
+                                horizontal: 16,
                               ),
-                            );
-                          }
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  statItem(
+                                    'Posts',
+                                    actualPostsCount.toString(),
+                                  ),
+                                  statItem(
+                                    'Followers',
+                                    followers.toString(),
+                                  ),
+                                  statItem(
+                                    'Following',
+                                    following.toString(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Postingan Saya',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (docs.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24.0),
+                            child: Center(child: Text('Belum ada postingan')),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                            ),
+                            child: GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                    childAspectRatio: 1,
+                                  ),
+                              itemCount: docs.length,
+                              itemBuilder: (context, index) {
+                                final post =
+                                    docs[index].data() as Map<String, dynamic>;
+                                final imageUrl =
+                                    post['imageUrl']?.toString() ?? '';
+                                final imageBase64 =
+                                    post['imageBase64']?.toString() ?? '';
 
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: postImage,
-                          );
-                        },
-                      ),
+                                Widget postImage;
+                                if (imageUrl.isNotEmpty) {
+                                  postImage = Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                  );
+                                } else if (imageBase64.isNotEmpty) {
+                                  try {
+                                    postImage = Image.memory(
+                                      base64Decode(imageBase64),
+                                      fit: BoxFit.cover,
+                                    );
+                                  } catch (_) {
+                                    postImage = Container(
+                                      color: AppColors.border,
+                                      child: const Center(
+                                        child: Text('Gambar tidak bisa dimuat'),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  postImage = Container(
+                                    color: AppColors.border,
+                                    child: const Center(
+                                      child: Text('Tidak ada gambar'),
+                                    ),
+                                  );
+                                }
+
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: postImage,
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 24),
+                      ],
                     );
                   },
                 ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+}
+
+class UserProfileScreen extends StatefulWidget {
+  final String userId;
+  const UserProfileScreen({Key? key, required this.userId}) : super(key: key);
+
+  @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  bool _isProcessingFollow = false;
+
+  Future<void> _toggleFollow(bool isFollowing) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    if (currentUser.uid == widget.userId) return;
+
+    setState(() => _isProcessingFollow = true);
+
+    final currentUserRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid);
+    final targetUserRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId);
+    final followRef = currentUserRef.collection('following').doc(widget.userId);
+    final followerRef = targetUserRef
+        .collection('followers')
+        .doc(currentUser.uid);
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    if (isFollowing) {
+      batch.delete(followRef);
+      batch.delete(followerRef);
+      batch.update(currentUserRef, {'following': FieldValue.increment(-1)});
+      batch.update(targetUserRef, {'followers': FieldValue.increment(-1)});
+    } else {
+      batch.set(followRef, {'followedAt': FieldValue.serverTimestamp()});
+      batch.set(followerRef, {'followedAt': FieldValue.serverTimestamp()});
+      batch.update(currentUserRef, {'following': FieldValue.increment(1)});
+      batch.update(targetUserRef, {'followers': FieldValue.increment(1)});
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal ${isFollowing ? 'unfollow' : 'follow'} user: $e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessingFollow = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isSelf = currentUser?.uid == widget.userId;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text('User tidak ditemukan'));
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          final username = data['username']?.toString() ?? 'Unknown';
+          final email = data['email']?.toString() ?? '';
+          final followers = data['followers'] ?? 0;
+          final following = data['following'] ?? 0;
+          final avatarUrl = data['avatarUrl']?.toString() ?? '';
+          final avatarBase64 = data['avatarBase64']?.toString() ?? '';
+
+          ImageProvider<Object>? avatarImage = _imageProviderFromAvatarStrings(
+            base64Str: avatarBase64,
+            url: avatarUrl,
+          );
+
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+                CircleAvatar(
+                  radius: 58,
+                  backgroundColor: AppColors.secondary.withOpacity(0.24),
+                  backgroundImage: avatarImage,
+                  child: avatarImage == null
+                      ? const Icon(Icons.person, size: 48, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  username,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  email,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 20,
+                        horizontal: 16,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          statItem('Followers', followers.toString()),
+                          statItem('Following', following.toString()),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (!isSelf)
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: currentUser == null
+                        ? Stream<DocumentSnapshot>.empty()
+                        : FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(currentUser.uid)
+                              .collection('following')
+                              .doc(widget.userId)
+                              .snapshots(),
+                    builder: (context, followSnapshot) {
+                      final isFollowing =
+                          followSnapshot.hasData && followSnapshot.data!.exists;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isFollowing
+                                ? AppColors.surface
+                                : AppColors.primary,
+                            foregroundColor: isFollowing
+                                ? AppColors.primary
+                                : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                          onPressed: _isProcessingFollow
+                              ? null
+                              : () => _toggleFollow(isFollowing),
+                          child: Text(isFollowing ? 'Unfollow' : 'Follow'),
+                        ),
+                      );
+                    },
+                  ),
                 const SizedBox(height: 24),
               ],
             ),

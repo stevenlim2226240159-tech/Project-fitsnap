@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_fitsnap/screens/test_screen.dart';
+import 'package:flutter_fitsnap/screens/sign_in_screen.dart';
 import 'firebase_options.dart'; // hasil dari flutterfire configure
-import 'screens/sign_in_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/post_photo_screen.dart';
+import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,10 +19,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'FitSnap',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: appTheme,
       home: const SignInScreen(),
     );
   }
