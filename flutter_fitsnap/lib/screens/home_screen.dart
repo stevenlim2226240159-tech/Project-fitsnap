@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'notifications_screen.dart';
 import 'post_detail_screen.dart';
 import '../theme.dart';
 import 'profile_screen.dart';
@@ -22,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> get _screens => [
     const _FeedScreen(),
     const PostPhotoScreen(),
+    const NotificationsScreen(),
     ProfileScreen(onLogout: _handleLogout),
   ];
 
@@ -40,26 +42,77 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onItemTapped,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(
-            icon: Icon(Icons.add_box_outlined),
-            label: 'Post',
+    final user = FirebaseAuth.instance.currentUser;
+    final Stream<QuerySnapshot<Map<String, dynamic>>> unreadNotificationsStream = user != null
+        ? FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .where('read', isEqualTo: false)
+            .snapshots()
+        : const Stream.empty().cast<QuerySnapshot<Map<String, dynamic>>>();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: unreadNotificationsStream,
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data?.docs.length ?? 0;
+        return Scaffold(
+          body: _screens[_selectedIndex],
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onItemTapped,
+            destinations: [
+              const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+              const NavigationDestination(
+                icon: Icon(Icons.add_box_outlined),
+                label: 'Post',
+              ),
+              NavigationDestination(
+                icon: _buildNotificationIcon(unreadCount),
+                label: 'Notifikasi',
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                label: 'Profil',
+              ),
+            ],
+            height: 70,
+            backgroundColor: AppColors.surface,
+            indicatorColor: AppColors.secondary.withOpacity(0.16),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationIcon(int unreadCount) {
+    if (unreadCount <= 0) {
+      return const Icon(Icons.notifications_none);
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_none),
+        Positioned(
+          right: -4,
+          top: -4,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.redAccent,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.surface, width: 1.5),
+            ),
+            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+            child: Center(
+              child: Text(
+                unreadCount > 9 ? '9+' : unreadCount.toString(),
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
-        ],
-        height: 70,
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.secondary.withOpacity(0.16),
-      ),
+        ),
+      ],
     );
   }
 }
@@ -74,7 +127,48 @@ class _FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<_FeedScreen> {
   static const double _imageHeight = 260;
 
-  Future<void> _toggleLike(String postId, bool isLiked) async {
+  Future<String> _currentUsername() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'Seseorang';
+    final userSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    return userSnapshot.data()?['username']?.toString() ?? user.email?.split('@').first ?? 'Seseorang';
+  }
+
+  Future<void> _addNotification({
+    required String targetUserId,
+    required String type,
+    required String fromUserId,
+    required String fromUsername,
+    String? postId,
+  }) async {
+    if (targetUserId.isEmpty || targetUserId == fromUserId) return;
+    final notificationRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUserId)
+        .collection('notifications');
+
+    final message = type == 'follow'
+        ? '$fromUsername mulai mengikuti Anda'
+        : type == 'like'
+            ? '$fromUsername menyukai postingan Anda'
+            : '$fromUsername mengomentari postingan Anda';
+
+    await notificationRef.add({
+      'type': type,
+      'fromUserId': fromUserId,
+      'fromUsername': fromUsername,
+      'postId': postId,
+      'message': message,
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
+
+  Future<void> _toggleLike(
+    String postId,
+    bool isLiked,
+    String targetUserId,
+  ) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignInScreen()));
@@ -94,6 +188,16 @@ class _FeedScreenState extends State<_FeedScreen> {
     }
     try {
       await batch.commit();
+      if (!isLiked) {
+        final fromUsername = await _currentUsername();
+        await _addNotification(
+          targetUserId: targetUserId,
+          type: 'like',
+          fromUserId: user.uid,
+          fromUsername: fromUsername,
+          postId: postId,
+        );
+      }
     } catch (_) {}
   }
 
@@ -330,7 +434,11 @@ class _FeedScreenState extends State<_FeedScreen> {
                                       return Row(
                                         children: [
                                           IconButton(
-                                            onPressed: () => _toggleLike(postId, isLiked),
+                                            onPressed: () => _toggleLike(
+                                              postId,
+                                              isLiked,
+                                              post['userId']?.toString() ?? '',
+                                            ),
                                             icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.black87),
                                           ),
                                           Text(likes.toString()),

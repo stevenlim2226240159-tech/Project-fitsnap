@@ -36,6 +36,41 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return null;
   }
 
+  Future<String> _currentUsername() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'Seseorang';
+    final userSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    return userSnapshot.data()?['username']?.toString() ?? user.email?.split('@').first ?? 'Seseorang';
+  }
+
+  Future<void> _addNotification({
+    required String targetUserId,
+    required String type,
+    required String fromUserId,
+    required String fromUsername,
+    String? postId,
+  }) async {
+    if (targetUserId.isEmpty || targetUserId == fromUserId) return;
+    final notificationRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUserId)
+        .collection('notifications');
+
+    final message = type == 'like'
+        ? '$fromUsername menyukai postingan Anda'
+        : '$fromUsername mengomentari postingan Anda';
+
+    await notificationRef.add({
+      'type': type,
+      'fromUserId': fromUserId,
+      'fromUsername': fromUsername,
+      'postId': postId,
+      'message': message,
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
+
   Future<void> _toggleLike(String postId, bool isLiked) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -56,6 +91,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
     try {
       await batch.commit();
+      if (!isLiked) {
+        final targetUserId = widget.post['userId']?.toString() ?? '';
+        final fromUsername = await _currentUsername();
+        await _addNotification(
+          targetUserId: targetUserId,
+          type: 'like',
+          fromUserId: user.uid,
+          fromUsername: fromUsername,
+          postId: postId,
+        );
+      }
     } catch (_) {}
   }
 
@@ -80,6 +126,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       await postRef.update({'commentsCount': FieldValue.increment(1)});
+      final targetUserId = widget.post['userId']?.toString() ?? '';
+      await _addNotification(
+        targetUserId: targetUserId,
+        type: 'comment',
+        fromUserId: user.uid,
+        fromUsername: username,
+        postId: postId,
+      );
       _commentController.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Komentar terkirim')));

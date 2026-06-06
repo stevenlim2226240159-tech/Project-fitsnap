@@ -450,6 +450,13 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isProcessingFollow = false;
 
+  Future<String> _currentUsername() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return 'Seseorang';
+    final userSnapshot = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+    return userSnapshot.data()?['username']?.toString() ?? currentUser.email?.split('@').first ?? 'Seseorang';
+  }
+
   Future<void> _toggleFollow(bool isFollowing) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
@@ -484,6 +491,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     try {
       await batch.commit();
+      if (!isFollowing) {
+        final fromUsername = await _currentUsername();
+        if (widget.userId.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.userId)
+              .collection('notifications')
+              .add({
+            'type': 'follow',
+            'fromUserId': currentUser.uid,
+            'fromUsername': fromUsername,
+            'message': '$fromUsername mulai mengikuti Anda',
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+          });
+        }
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
