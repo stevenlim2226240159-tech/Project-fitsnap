@@ -7,6 +7,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme.dart';
+import 'edit_profile_screen.dart';
+import 'followers_screen.dart';
+import 'following_screen.dart';
+import 'post_detail_screen.dart';
 
 ImageProvider<Object>? _imageProviderFromAvatarStrings({
   String? base64Str,
@@ -177,6 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final username = data['username']?.toString() ?? 'Unknown';
+          final bio = data['bio']?.toString() ?? '';
           final avatarUrl = data['avatarUrl']?.toString() ?? '';
           final avatarBase64 = data['avatarBase64']?.toString() ?? '';
           final followers = data['followers'] ?? 0;
@@ -236,7 +241,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 : null,
                           ),
                           GestureDetector(
-                            onTap: _isSavingAvatar ? null : _pickAvatar,
+                            onTap: () {
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => const EditProfileScreen(),
+                              ));
+                            },
                             child: Container(
                               width: 40,
                               height: 40,
@@ -244,10 +253,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(
-                                _isSavingAvatar
-                                    ? Icons.hourglass_top
-                                    : Icons.edit,
+                              child: const Icon(
+                                Icons.edit,
                                 color: AppColors.primary,
                                 size: 20,
                               ),
@@ -270,6 +277,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Colors.white70,
                         ),
                       ),
+                      if (bio.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          bio,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -331,13 +348,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     'Posts',
                                     actualPostsCount.toString(),
                                   ),
-                                  statItem(
-                                    'Followers',
-                                    followers.toString(),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.of(context).push(MaterialPageRoute(
+                                        builder: (_) => FollowersScreen(userId: user.uid),
+                                      ));
+                                    },
+                                    child: statItem(
+                                      'Followers',
+                                      followers.toString(),
+                                    ),
                                   ),
-                                  statItem(
-                                    'Following',
-                                    following.toString(),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.of(context).push(MaterialPageRoute(
+                                        builder: (_) => FollowingScreen(userId: user.uid),
+                                      ));
+                                    },
+                                    child: statItem(
+                                      'Following',
+                                      following.toString(),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -417,9 +448,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   );
                                 }
 
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: postImage,
+                                return GestureDetector(
+                                  onTap: () {
+                                    final p = Map<String, dynamic>.from(post);
+                                    p['id'] = docs[index].id;
+                                    Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => PostDetailScreen(post: p),
+                                    ));
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: postImage,
+                                  ),
                                 );
                               },
                             ),
@@ -558,6 +598,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
           final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final username = data['username']?.toString() ?? 'Unknown';
+          final bio = data['bio']?.toString() ?? '';
           final email = data['email']?.toString() ?? '';
           final followers = data['followers'] ?? 0;
           final following = data['following'] ?? 0;
@@ -596,27 +637,65 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     color: AppColors.textSecondary,
                   ),
                 ),
+                if (bio.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    bio,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 20,
-                        horizontal: 16,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          statItem('Followers', followers.toString()),
-                          statItem('Following', following.toString()),
-                        ],
-                      ),
-                    ),
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('posts')
+                        .where('userId', isEqualTo: widget.userId)
+                        .snapshots(),
+                    builder: (context, postsSnapshot) {
+                      final postsCount = postsSnapshot.data?.docs.length ?? 0;
+                      return Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 20,
+                            horizontal: 16,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                children: [
+                                  statItem('Posts', postsCount.toString()),
+                                ],
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => FollowersScreen(userId: widget.userId),
+                                  ));
+                                },
+                                child: statItem('Followers', followers.toString()),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => FollowingScreen(userId: widget.userId),
+                                  ));
+                                },
+                                child: statItem('Following', following.toString()),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -657,6 +736,113 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     },
                   ),
                 const SizedBox(height: 24),
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('posts')
+                      .where('userId', isEqualTo: widget.userId)
+                      .snapshots(),
+                  builder: (context, postSnapshot) {
+                    if (postSnapshot.hasError) {
+                      return Center(child: Text('Error: ${postSnapshot.error}'));
+                    }
+                    if (postSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final docs = postSnapshot.data?.docs.toList() ?? [];
+
+                    docs.sort((a, b) {
+                      final aData = a.data() as Map<String, dynamic>;
+                      final bData = b.data() as Map<String, dynamic>;
+                      final ta = aData['createdAt'];
+                      final tb = bData['createdAt'];
+                      if (ta == null && tb == null) return 0;
+                      if (ta == null) return 1;
+                      if (tb == null) return -1;
+                      try {
+                        return tb.toDate().compareTo(ta.toDate());
+                      } catch (_) {
+                        return 0;
+                      }
+                    });
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Postingan',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (docs.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24.0),
+                            child: Center(child: Text('Belum ada postingan')),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                            child: GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                                childAspectRatio: 1,
+                              ),
+                              itemCount: docs.length,
+                              itemBuilder: (context, index) {
+                                final post = docs[index].data() as Map<String, dynamic>;
+                                final imageUrl = post['imageUrl']?.toString() ?? '';
+                                final imageBase64 = post['imageBase64']?.toString() ?? '';
+
+                                Widget postImage;
+                                if (imageUrl.isNotEmpty) {
+                                  postImage = Image.network(imageUrl, fit: BoxFit.cover);
+                                } else if (imageBase64.isNotEmpty) {
+                                  try {
+                                    postImage = Image.memory(base64Decode(imageBase64), fit: BoxFit.cover);
+                                  } catch (_) {
+                                    postImage = Container(
+                                      color: AppColors.border,
+                                      child: const Center(child: Text('Gambar tidak bisa dimuat')),
+                                    );
+                                  }
+                                } else {
+                                  postImage = Container(
+                                    color: AppColors.border,
+                                    child: const Center(child: Text('Tidak ada gambar')),
+                                  );
+                                }
+
+                                return GestureDetector(
+                                  onTap: () {
+                                    final p = Map<String, dynamic>.from(post);
+                                    p['id'] = docs[index].id;
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: p)));
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: postImage,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 24),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           );
