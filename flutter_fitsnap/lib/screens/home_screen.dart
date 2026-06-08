@@ -9,6 +9,22 @@ import '../theme.dart';
 import 'profile_screen.dart';
 import 'post_photo_screen.dart';
 import 'sign_in_screen.dart';
+import 'direct_messages_screen.dart';
+import 'user_search_screen.dart';
+
+ImageProvider<Object>? _avatarFromData({String? base64Str, String? url}) {
+  if (base64Str != null && base64Str.isNotEmpty) {
+    try {
+      return MemoryImage(base64Decode(base64Str));
+    } catch (_) {
+      // fallback to URL if base64 is invalid
+    }
+  }
+  if (url != null && url.isNotEmpty) {
+    return NetworkImage(url);
+  }
+  return null;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -240,6 +256,17 @@ class _FeedScreenState extends State<_FeedScreen> {
                 snap: true,
                 elevation: 0,
                 backgroundColor: Colors.transparent,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.mode_comment_outlined, color: AppColors.primary),
+                    tooltip: 'Pesan Langsung',
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const DirectMessagesScreen(),
+                      ));
+                    },
+                  ),
+                ],
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -260,6 +287,45 @@ class _FeedScreenState extends State<_FeedScreen> {
                   ],
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const UserSearchScreen(),
+                      ));
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.search, color: AppColors.textSecondary),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Cari username...',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Profile carousel removed per user request.
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -323,6 +389,13 @@ class _FeedScreenState extends State<_FeedScreen> {
                       );
                     }
 
+                    final authorAvatarBase64 = post['avatarBase64']?.toString() ?? '';
+                    final authorAvatarUrl = post['avatarUrl']?.toString() ?? '';
+                    final authorAvatarImage = _avatarFromData(
+                      base64Str: authorAvatarBase64,
+                      url: authorAvatarUrl,
+                    );
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 18),
                       elevation: 5,
@@ -356,12 +429,11 @@ class _FeedScreenState extends State<_FeedScreen> {
                                 children: [
                                   CircleAvatar(
                                     radius: 24,
-                                    backgroundImage: NetworkImage(
-                                      post['avatarUrl'] ??
-                                          'https://via.placeholder.com/150',
-                                    ),
-                                    backgroundColor: AppColors.secondary
-                                        .withOpacity(0.24),
+                                    backgroundImage: authorAvatarImage,
+                                    backgroundColor: AppColors.secondary.withOpacity(0.24),
+                                    child: authorAvatarImage == null
+                                        ? const Icon(Icons.person, color: Colors.white)
+                                        : null,
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(

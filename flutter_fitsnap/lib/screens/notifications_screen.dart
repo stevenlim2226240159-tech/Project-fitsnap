@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'direct_messages_screen.dart';
 import 'post_detail_screen.dart';
 import 'profile_screen.dart';
 
@@ -27,6 +28,8 @@ class NotificationsScreen extends StatelessWidget {
         return Icons.comment;
       case 'follow':
         return Icons.person_add;
+      case 'dm':
+        return Icons.message;
       default:
         return Icons.notifications;
     }
@@ -149,6 +152,23 @@ class NotificationsScreen extends StatelessWidget {
           builder: (_) => UserProfileScreen(userId: fromUserId),
         ),
       );
+      return;
+    }
+
+    if (type == 'dm' && fromUserId != null && fromUserId.isNotEmpty) {
+      final conversationId = data['conversationId']?.toString();
+      final otherUsername = data['fromUsername']?.toString() ?? 'Pengguna';
+      if (conversationId != null && conversationId.isNotEmpty) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              conversationId: conversationId,
+              otherUserId: fromUserId,
+              otherUsername: otherUsername,
+            ),
+          ),
+        );
+      }
       return;
     }
   }
