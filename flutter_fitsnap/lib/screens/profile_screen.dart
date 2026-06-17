@@ -11,6 +11,12 @@ import 'edit_profile_screen.dart';
 import 'followers_screen.dart';
 import 'following_screen.dart';
 import 'post_detail_screen.dart';
+import 'direct_messages_screen.dart';
+
+String _conversationId(String uid1, String uid2) {
+  final ids = [uid1, uid2]..sort();
+  return ids.join('_');
+}
 
 ImageProvider<Object>? _imageProviderFromAvatarStrings({
   String? base64Str,
@@ -158,7 +164,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.mode_comment_outlined, color: AppColors.primary),
+            tooltip: 'Pesan Langsung',
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const DirectMessagesScreen(),
+              ));
+            },
+          ),
+        ],
       ),
+      
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -289,6 +307,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                       const SizedBox(height: 24),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: const Icon(Icons.mode_comment_outlined),
+                    label: const Text('Pesan Langsung'),
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const DirectMessagesScreen(),
+                      ));
+                    },
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -579,7 +618,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: isSelf
+            ? null
+            : [
+                IconButton(
+                  icon: const Icon(Icons.message, color: AppColors.primary),
+                  tooltip: 'Kirim Pesan',
+                  onPressed: () async {
+                    final currentUser = FirebaseAuth.instance.currentUser;
+                    if (currentUser == null) return;
+                    final chatId = _conversationId(currentUser.uid, widget.userId);
+                    final otherSnapshot = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
+                    final otherUsername = otherSnapshot.exists
+                        ? (otherSnapshot.data()?['username']?.toString() ?? 'Pengguna')
+                        : 'Pengguna';
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ChatScreen(
+                        conversationId: chatId,
+                        otherUserId: widget.userId,
+                        otherUsername: otherUsername,
+                      ),
+                    ));
+                  },
+                ),
+              ],
       ),
+      
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -712,27 +776,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     builder: (context, followSnapshot) {
                       final isFollowing =
                           followSnapshot.hasData && followSnapshot.data!.exists;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isFollowing
-                                ? AppColors.surface
-                                : AppColors.primary,
-                            foregroundColor: isFollowing
-                                ? AppColors.primary
-                                : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            minimumSize: const Size(double.infinity, 48),
-                          ),
-                          onPressed: _isProcessingFollow
-                              ? null
-                              : () => _toggleFollow(isFollowing),
-                          child: Text(isFollowing ? 'Unfollow' : 'Follow'),
-                        ),
-                      );
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Column(
+                                  children: [
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isFollowing
+                                            ? AppColors.surface
+                                            : AppColors.primary,
+                                        foregroundColor: isFollowing
+                                            ? AppColors.primary
+                                            : Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        minimumSize: const Size(double.infinity, 48),
+                                      ),
+                                      onPressed: _isProcessingFollow
+                                          ? null
+                                          : () => _toggleFollow(isFollowing),
+                                      child: Text(isFollowing ? 'Unfollow' : 'Follow'),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        minimumSize: const Size(double.infinity, 48),
+                                      ),
+                                      onPressed: currentUser == null
+                                          ? null
+                                          : () {
+                                              final chatId = _conversationId(currentUser.uid, widget.userId);
+                                              Navigator.of(context).push(MaterialPageRoute(
+                                                builder: (_) => ChatScreen(
+                                                  conversationId: chatId,
+                                                  otherUserId: widget.userId,
+                                                  otherUsername: username,
+                                                ),
+                                              ));
+                                            },
+                                      child: const Text('Kirim Pesan'),
+                                    ),
+                                  ],
+                                ),
+                              );
                     },
                   ),
                 const SizedBox(height: 24),
